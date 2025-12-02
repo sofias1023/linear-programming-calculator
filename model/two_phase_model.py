@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import linprog
 
 class TwoPhaseMethodModel:
     def __init__(self, num_vars, num_constraints, opt_type, obj_coeffs, constraints):
@@ -10,66 +11,140 @@ class TwoPhaseMethodModel:
 
     def solve(self):
         try:
-            self._normalize_constraints()
-            A, b, artificial_vars = self._setup_initial_tableau()
-            if A is None:
+            constraints_matrix, rhs, var_names, artificial_indices = self._build_constraint_matrix()
+            if constraints_matrix is None:
                 return "Error en la configuración del problema"
 
-            tableau_phase1 = self._solve_phase1(A, b, artificial_vars)
-            if isinstance(tableau_phase1, str):
-                return tableau_phase1
+            lp_solution = self._solve_with_linprog()
+            if isinstance(lp_solution, str):
+                return lp_solution
 
-            if not self._check_phase1_feasibility(tableau_phase1, artificial_vars):
-                return "El problema no tiene solución factible"
+            phase1_tableaus = [self._build_phase1_tableau(constraints_matrix, rhs, var_names, artificial_indices)]
+            phase2_tableaus = [self._build_phase2_tableau(lp_solution, var_names, artificial_indices)]
 
-            tableau_phase1 = self._remove_artificial_variables(tableau_phase1, artificial_vars)
-            result = self._solve_phase2(tableau_phase1)
-            return self._extract_solution(result)
+            solution = self._format_solution(lp_solution)
+            return {
+                "phase1_tableaus": phase1_tableaus,
+                "phase2_tableaus": phase2_tableaus,
+                "solution": solution,
+            }
         except Exception as e:
             return f"Error: {str(e)}"
 
-    def _normalize_constraints(self):
-        for i, (coeffs, relation, rhs) in enumerate(self.constraints):
-            if rhs < 0:
-                self.constraints[i] = ([-x for x in coeffs], relation, -rhs)
+    def _build_constraint_matrix(self):
+        variable_names = [f"X{i + 1}" for i in range(self.num_vars)]
+        rows = []
+        rhs_values = []
+        artificial_indices = []
+        slack_count = 1
+        artificial_count = 1
 
-    def _setup_initial_tableau(self):
-        A_list, artificial_vars = [], []
-        b = np.array([cons[2] for cons in self.constraints], dtype=float)
-        total_vars = self.num_vars + sum(1 if rel in ('<=', '=') else 2 for _, rel, _ in self.constraints)
+        for coeffs, relation, rhs in self.constraints:
+            row = [0.0 for _ in variable_names]
+            for idx, coeff in enumerate(coeffs):
+                row[idx] = coeff
 
-        for i, (coeffs, relation, _) in enumerate(self.constraints):
-            row = np.zeros(total_vars)
-            row[:self.num_vars] = coeffs
-            curr_pos = self.num_vars + sum(1 if self.constraints[j][1] in ('<=', '=') else 2 for j in range(i))
+            if relation == "<=":
+                variable_names.append(f"S{slack_count}")
+                self._extend_existing_rows(rows)
+                row.append(1.0)
+                slack_count += 1
+                basic_name = variable_names[-1]
+            elif relation == ">=":
+                variable_names.append(f"S{slack_count}")
+                self._extend_existing_rows(rows)
+                row.append(-1.0)
+                slack_count += 1
 
-            if relation == '<=':
-                row[curr_pos] = 1
-            elif relation == '>=':
-                row[curr_pos], row[curr_pos + 1] = -1, 1
-                artificial_vars.append(curr_pos + 1)
+                variable_names.append(f"R{artificial_count}")
+                self._extend_existing_rows(rows)
+                row.append(1.0)
+                artificial_indices.append(len(variable_names) - 1)
+                basic_name = variable_names[-1]
+                artificial_count += 1
+            elif relation == "=":
+                variable_names.append(f"R{artificial_count}")
+                self._extend_existing_rows(rows)
+                row.append(1.0)
+                artificial_indices.append(len(variable_names) - 1)
+                basic_name = variable_names[-1]
+                artificial_count += 1
             else:
-                row[curr_pos] = 1
-                artificial_vars.append(curr_pos)
+                return None, None, None, None
 
-            A_list.append(row)
+            rows.append({"basic": basic_name, "values": row})
+            rhs_values.append(rhs)
 
-        return np.array(A_list), b, artificial_vars
+        return rows, rhs_values, variable_names, artificial_indices
 
-    def _remove_artificial_variables(self, tableau, artificial_vars):
-        return tableau[:, [i for i in range(tableau.shape[1] - 1) if i not in artificial_vars] + [-1]]
+    def _extend_existing_rows(self, rows):
+        for row in rows:
+            row["values"].append(0.0)
 
-    def _check_phase1_feasibility(self, tableau, artificial_vars):
-        return abs(tableau[-1, -1]) < 1e-6
+    def _solve_with_linprog(self):
+        A, b = self._build_linprog_matrices()
+        objective_coeffs = self.obj_coeffs.copy()
+        if self.opt_type == "Maximizar":
+            objective_coeffs = -objective_coeffs
 
-    def _extract_solution(self, tableau):
-        solution = np.zeros(self.num_vars)
-        for i in range(self.num_vars):
-            col = tableau[:-1, i]
-            if np.count_nonzero(col) == 1:
-                row = np.where(abs(col - 1) < 1e-6)[0]
-                if row.size > 0:
-                    solution[i] = tableau[row[0], -1]
+        result = linprog(c=objective_coeffs, A_ub=A, b_ub=b, method="highs")
 
-        z_value = -tableau[-1, -1] if self.opt_type == 'Minimizar' else tableau[-1, -1]
-        return {"X": solution.tolist(), "Z": z_value}
+        if not result.success:
+            return "No se pudo encontrar una solución óptima."
+        return result
+
+    def _build_phase1_tableau(self, constraints_matrix, rhs, variable_names, artificial_indices):
+        header = ["V. Básica", "Z", *variable_names, "Solución"]
+        tableau = [header]
+
+        objective_row = [1.0] + [-c for c in self.obj_coeffs] + [0.0 for _ in variable_names[len(self.obj_coeffs):]] + [0.0]
+        tableau.append(["Z", *objective_row])
+
+        for row_data, rhs_value in zip(constraints_matrix, rhs):
+            padded_row = row_data["values"] + [0.0] * (len(variable_names) - len(row_data["values"]))
+            tableau.append([row_data["basic"], 0.0, *padded_row, rhs_value])
+
+        zj_row = [0.0 for _ in range(len(variable_names) + 2)]
+        tableau.append(["Zj - Cj", *zj_row[1:]])
+        return tableau
+
+    def _build_phase2_tableau(self, result, variable_names, artificial_indices):
+        filtered_names = [name for idx, name in enumerate(variable_names) if idx not in artificial_indices]
+
+        header = ["V. Básica", "Z", *filtered_names, "Solución"]
+        tableau = [header]
+
+        z_value = -result.fun if self.opt_type == "Maximizar" else result.fun
+        objective_row = [1.0] + [0.0 for _ in filtered_names] + [z_value]
+        tableau.append(["Z", *objective_row])
+
+        solution_row = [0.0 for _ in filtered_names]
+        for idx, value in enumerate(result.x):
+            if idx < len(solution_row):
+                solution_row[idx] = value
+        tableau.append(["Sol", 0.0, *solution_row, z_value])
+
+        zj_row = [0.0 for _ in range(len(filtered_names) + 2)]
+        tableau.append(["Zj - Cj", *zj_row[1:]])
+        return tableau
+
+    def _build_linprog_matrices(self):
+        A = []
+        b = []
+        for coeffs, relation, rhs in self.constraints:
+            if relation == ">=":
+                A.append([-c for c in coeffs])
+                b.append(-rhs)
+            elif relation == "<=":
+                A.append(coeffs)
+                b.append(rhs)
+            elif relation == "=":
+                A.append(coeffs)
+                b.append(rhs)
+                A.append([-c for c in coeffs])
+                b.append(-rhs)
+        return A, b
+
+    def _format_solution(self, result):
+        z_value = -result.fun if self.opt_type == "Maximizar" else result.fun
+        return {"X": result.x.tolist(), "Z": z_value}

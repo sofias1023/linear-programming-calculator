@@ -164,5 +164,59 @@ class TwoPhaseMethodView:
         for widget in self.result_frame.winfo_children():
             widget.destroy()
 
-        # Mostrar resultado como "Valor óptimo por Z ="
-        tk.Label(self.result_frame, text=f"{result}", justify=tk.LEFT, bg="#2e2e2e", fg="#ffffff", font=("Helvetica", 16)).pack(pady=20)
+        if isinstance(result, str):
+            tk.Label(
+                self.result_frame,
+                text=result,
+                justify=tk.LEFT,
+                bg="#2e2e2e",
+                fg="#ffffff",
+                font=("Helvetica", 16),
+            ).pack(pady=20)
+            return
+
+        notebook = ttk.Notebook(self.result_frame)
+        notebook.pack(expand=True, fill="both")
+
+        self.display_phase(notebook, result.get("phase1_tableaus", []), "Fase 1")
+        self.display_phase(notebook, result.get("phase2_tableaus", []), "Fase 2")
+        self.display_solution(notebook, result.get("solution", {}))
+
+    def display_phase(self, notebook, phase_tableaus, phase_name):
+        phase_frame = ttk.Frame(notebook)
+        notebook.add(phase_frame, text=phase_name)
+
+        if not phase_tableaus:
+            ttk.Label(phase_frame, text="Sin iteraciones", background="#2e2e2e", foreground="white").pack(pady=10)
+            return
+
+        for idx, tableau in enumerate(phase_tableaus):
+            group = ttk.LabelFrame(phase_frame, text=f"Iteración {idx + 1}")
+            group.pack(fill="both", expand=True, padx=10, pady=5)
+            self.display_tableau(group, tableau)
+
+    def display_solution(self, notebook, solution):
+        solution_frame = ttk.Frame(notebook)
+        notebook.add(solution_frame, text="Solución")
+
+        ttk.Label(solution_frame, text=f"Valor óptimo de Z: {solution.get('Z', 0)}", font=("Helvetica", 14)).pack(pady=10)
+        for i, val in enumerate(solution.get("X", [])):
+            ttk.Label(solution_frame, text=f"X{i + 1} = {val}").pack()
+
+    def display_tableau(self, parent, tableau):
+        frame = ttk.Frame(parent)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        headers = tableau[0]
+        for col, header in enumerate(headers):
+            cell = ttk.Label(frame, text=header, borderwidth=1, relief="solid", padding=5, background="#a9a9a9", foreground="white")
+            cell.grid(row=0, column=col, sticky="nsew")
+
+        for row_idx, row in enumerate(tableau[1:], start=1):
+            for col_idx, value in enumerate(row):
+                bg_color = "white" if row_idx != len(tableau) - 1 else "#add8e6"
+                cell = ttk.Label(frame, text=str(value), borderwidth=1, relief="solid", padding=5, background=bg_color)
+                cell.grid(row=row_idx, column=col_idx, sticky="nsew")
+
+        for col in range(len(headers)):
+            frame.grid_columnconfigure(col, weight=1)

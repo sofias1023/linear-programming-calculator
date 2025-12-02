@@ -1,4 +1,4 @@
-from scipy.optimize import linprog
+from model.two_phase_model import TwoPhaseMethodModel
 
 class TwoPhaseMethodController:
     def __init__(self, view):
@@ -59,24 +59,23 @@ class TwoPhaseMethodController:
             self.view.display_result("Número de variables o restricciones inválido.")
             return
 
-        # Obtener los coeficientes de la función objetivo y las restricciones
+        obj_type = self.view.opt_type.get()        
         objective_coeffs = self.get_entries_values(self.view.obj_coeff_entries)
-        A, b = self.get_constraints_values(num_constraints, num_vars)
+        constraints = self.get_constraints(num_vars)
 
-        # Obtener el tipo de objetivo: "Maximizar" o "Minimizar"
-        obj_type = self.view.opt_type.get()
-        if obj_type == "Maximizar":
-            objective_coeffs = [-c for c in objective_coeffs]
+        model = TwoPhaseMethodModel(num_vars, num_constraints, obj_type, objective_coeffs, constraints)
+        result = model.solve()
 
-        # Resolver el problema de LP usando SciPy
-        result = linprog(c=objective_coeffs, A_ub=A, b_ub=b, method='highs')
+        self.view.display_result(result)
 
-        if not result.success:
-            self.view.display_result("No se pudo encontrar una solución óptima.")
-            return
-
-        # Mostrar los resultados
-        result_text = f"Z = {result.fun}\n"
-        for i in range(num_vars):
-            result_text += f"x{i+1} = {result.x[i]}\n"
-        self.view.display_result(result_text)
+    def get_constraints(self, num_vars):
+        constraints = []
+        for cons in self.view.constraint_entries:
+            coeffs = self.get_entries_values(cons.get("coeff_entries", [])[:num_vars])
+            relation = cons.get("sign").get()
+            try:
+                rhs = float(cons.get("rhs").get())
+            except ValueError:
+                rhs = 0
+            constraints.append((coeffs, relation, rhs))
+        return constraints
