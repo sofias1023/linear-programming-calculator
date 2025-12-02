@@ -4,14 +4,7 @@ class TwoPhaseMethodController:
     def __init__(self, view):
         self.view = view
 
-    def create_matrix_entries(self):
-        try:
-            num_vars = int(self.view.num_vars_entry.get())
-            num_constraints = int(self.view.num_constraints_entry.get())
-        except ValueError:
-            self.view.display_result("Número de variables o restricciones inválido.")
-            return
-
+    def create_matrix_entries(self, num_vars, num_constraints):
         self.view.create_objective_entries(num_vars)
         self.view.create_constraint_entries(num_constraints, num_vars)
         self.view.create_calculate_button(self.calculate_solution)

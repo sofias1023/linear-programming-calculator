@@ -9,12 +9,13 @@ from utils.center_window import center_window
 from scipy.spatial import ConvexHull
 
 class GraphicMethodView:
-    def __init__(self):
+    def __init__(self, initial_restrictions=0):
         self.root = self.create_root_window()
         self.main_frame = self.create_main_frame()
         self.controls_frame = self.create_controls_frame()
         self.graph_frame = self.create_graph_frame()
         self.restrictions = []
+        self.initial_restrictions = max(0, initial_restrictions)
 
         self.create_widgets()
         center_window(self.root)
@@ -109,6 +110,9 @@ class GraphicMethodView:
         self.add_restriction_button = ttk.Button(restrictions_frame, text="Agregar Restricción", command=self.add_restriction)
         self.add_restriction_button.pack(pady=10)
 
+        for _ in range(self.initial_restrictions):
+            self.add_restriction()
+
     def create_calculate_button(self):
         self.calculate_button = ttk.Button(self.controls_frame, text="Calcular", command=self.calculate)
         self.calculate_button.pack(pady=20)
@@ -127,8 +131,9 @@ class GraphicMethodView:
     def volver_al_menu_anterior(self):
         """Cierra la ventana actual y vuelve al menú anterior."""
         self.root.destroy()
-        from view.MainView import MainView  # Importación aquí
-        MainView()
+        from view.TwoPhaseMethodView import TwoPhaseMethodView  # Importación aquí
+
+        TwoPhaseMethodView()
 
     def add_restriction(self):
         restriction_frame = tk.Frame(self.controls_frame, bg="#2e2e2e")

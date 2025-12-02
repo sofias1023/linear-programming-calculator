@@ -12,6 +12,12 @@ class TwoPhaseMethodView:
         self.root.state('zoomed')
         self.root.configure(bg="#2e2e2e")
 
+        self.obj_frame = None
+        self.constraints_frame = None
+        self.calculate_button = None
+        self.constraint_entries = []
+        self.obj_coeff_entries = []
+
         self.init_ui()
         self.controller = TwoPhaseMethodController(self)
 
@@ -29,8 +35,11 @@ class TwoPhaseMethodView:
         return entries
 
     def create_objective_entries(self, num_vars):
+        if self.obj_frame:
+            self.obj_frame.destroy()
         obj_frame = tk.Frame(self.frame, bg="#2e2e2e")
         obj_frame.pack(pady=10)
+        self.obj_frame = obj_frame
 
         tk.Label(obj_frame, text="Función Objetivo:", bg="#2e2e2e", fg="#ffffff", font=("Helvetica", 16)).pack(
             side=tk.LEFT, padx=5)
@@ -58,8 +67,11 @@ class TwoPhaseMethodView:
         self.obj_coeff_entries = [entry for entry in entry_labels_frame.winfo_children() if isinstance(entry, tk.Entry)]
 
     def create_constraint_entries(self, num_constraints, num_vars):
+        if self.constraints_frame:
+            self.constraints_frame.destroy()
         constraints_frame = tk.Frame(self.frame, bg="#2e2e2e")
         constraints_frame.pack(pady=10, fill="x")
+        self.constraints_frame = constraints_frame
 
         tk.Label(constraints_frame, text="Restricciones:", bg="#2e2e2e", fg="#ffffff", font=("Helvetica", 16)).pack(
             anchor="w", padx=5)
@@ -105,9 +117,12 @@ class TwoPhaseMethodView:
             })
 
     def create_calculate_button(self, command):
+        if self.calculate_button:
+            self.calculate_button.destroy()
         calculate_button = tk.Button(self.frame, text="Calcular Solución", command=command, bg="#ffffff", fg="#000000", font=("Helvetica", 14), relief="flat", bd=0, padx=10, pady=5)
         calculate_button.config(borderwidth=0, highlightthickness=0)
         calculate_button.pack(pady=10)
+        self.calculate_button = calculate_button
 
     def create_back_button(self):
         back_button = tk.Button(self.frame, text="Volver", command=self.on_back, bg="#ffffff", fg="#000000", font=("Helvetica", 14), relief="flat", bd=0, padx=10, pady=5)
@@ -153,12 +168,36 @@ class TwoPhaseMethodView:
         return entry
 
     def on_generate_matrix(self):
-        self.controller.create_matrix_entries()
+        for widget in self.result_frame.winfo_children():
+            widget.destroy()
+
+        try:
+            num_vars = int(self.num_vars_entry.get())
+            num_constraints = int(self.num_constraints_entry.get())
+        except ValueError:
+            self.display_result("Número de variables o restricciones inválido.")
+            return
+
+        if num_vars < 2:
+            self.display_result("Debe ingresar al menos 2 variables.")
+            return
+
+        if num_vars == 2:
+            self.root.destroy()
+            from view.GraphicMethodView import GraphicMethodView
+
+            GraphicMethodView(initial_restrictions=num_constraints)
+            return
+
+        self.constraint_entries = []
+        self.obj_coeff_entries = []
+        self.controller.create_matrix_entries(num_vars, num_constraints)
 
     def on_back(self):
         self.root.destroy()
-        from view.MainView import MainView
-        MainView()
+        from view.TwoPhaseMethodView import TwoPhaseMethodView
+
+        TwoPhaseMethodView()
 
     def display_result(self, result):
         for widget in self.result_frame.winfo_children():
