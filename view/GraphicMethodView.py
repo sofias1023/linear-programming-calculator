@@ -184,7 +184,15 @@ class GraphicMethodView:
         restrictions_frame = tk.Frame(self.controls_frame, bg=self.colors["panel"])
         restrictions_frame.pack(pady=10)
         self.add_restriction_button = ttk.Button(restrictions_frame, text="Agregar Restricción", command=self.add_restriction)
-        self.add_restriction_button.pack(pady=10)
+        self.add_restriction_button.pack(pady=10, fill=tk.X)
+
+        self.add_restriction_button = ttk.Button(
+            restrictions_frame, text="Agregar Restricción", command=self.add_restriction
+        )
+        self.add_restriction_button.pack(pady=(0, 10))
+
+        self.restrictions_container = tk.Frame(restrictions_frame, bg=self.colors["panel"])
+        self.restrictions_container.pack(fill=tk.X)
 
         for _ in range(self.initial_restrictions):
             self.add_restriction()
@@ -209,7 +217,7 @@ class GraphicMethodView:
     def create_footer_label(self):
         footer_label = tk.Label(
             self.root,
-            text="© Felipe Vernal · Sofía Sánchez · Johan Barreto",
+            text="© Felipe Bernal · Sofía Sánchez · Johan Barreto",
             font=("Helvetica", 10),
             bg=self.colors["bg"],
             fg=self.colors["muted"],
@@ -224,12 +232,22 @@ class GraphicMethodView:
         TwoPhaseMethodView()
 
     def add_restriction(self):
-        restriction_frame.pack(pady=5)
+        restriction_frame = tk.Frame(self.restrictions_container, bg=self.colors["panel"])
+        restriction_frame.pack(pady=5, anchor="w")
         self.create_restriction_fields(restriction_frame)
 
     def create_restriction_fields(self, frame):
         coef_x1 = self.create_entry(frame, width=3)
         coef_x1.pack(side=tk.LEFT, padx=5)
+        tk.Label(
+            frame,
+            text="x1:",
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            font=("Helvetica", 12, "bold"),
+        ).pack(side=tk.LEFT, padx=5)
+
+        coef_x2 = self.create_entry(frame, width=3)
         tk.Label(
             frame,
             text="x1:",
