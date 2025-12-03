@@ -182,17 +182,26 @@ class GraphicMethodView:
 
     def create_restrictions_widgets(self):
         restrictions_frame = tk.Frame(self.controls_frame, bg=self.colors["panel"])
-        restrictions_frame.pack(pady=10)
-        self.add_restriction_button = ttk.Button(restrictions_frame, text="Agregar Restricción", command=self.add_restriction)
-        self.add_restriction_button.pack(pady=10, fill=tk.X)
+        restrictions_frame.pack(pady=10, fill=tk.X)
+
+        header_frame = tk.Frame(restrictions_frame, bg=self.colors["panel"])
+        header_frame.pack(fill=tk.X)
+
+        tk.Label(
+            header_frame,
+            text="Restricciones",
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            font=("Helvetica", 12, "bold"),
+        ).pack(side=tk.LEFT, padx=5)
 
         self.add_restriction_button = ttk.Button(
-            restrictions_frame, text="Agregar Restricción", command=self.add_restriction
+            header_frame, text="Agregar Restricción", command=self.add_restriction
         )
-        self.add_restriction_button.pack(pady=(0, 10))
+        self.add_restriction_button.pack(side=tk.RIGHT, pady=(0, 10))
 
         self.restrictions_container = tk.Frame(restrictions_frame, bg=self.colors["panel"])
-        self.restrictions_container.pack(fill=tk.X)
+        self.restrictions_container.pack(fill=tk.X, pady=(8, 0))
 
         for _ in range(self.initial_restrictions):
             self.add_restriction()
@@ -237,27 +246,16 @@ class GraphicMethodView:
         self.create_restriction_fields(restriction_frame)
 
     def create_restriction_fields(self, frame):
+        tk.Label(
+            frame,
+            text="x1:",
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            font=("Helvetica", 12, "bold"),
+        ).pack(side=tk.LEFT, padx=5)
         coef_x1 = self.create_entry(frame, width=3)
         coef_x1.pack(side=tk.LEFT, padx=5)
-        tk.Label(
-            frame,
-            text="x1:",
-            bg=self.colors["panel"],
-            fg=self.colors["text"],
-            font=("Helvetica", 12, "bold"),
-        ).pack(side=tk.LEFT, padx=5)
 
-        coef_x2 = self.create_entry(frame, width=3)
-        tk.Label(
-            frame,
-            text="x1:",
-            bg=self.colors["panel"],
-            fg=self.colors["text"],
-            font=("Helvetica", 12, "bold"),
-        ).pack(side=tk.LEFT, padx=5)
-
-        coef_x2 = self.create_entry(frame, width=3)
-        coef_x2.pack(side=tk.LEFT, padx=5)
         tk.Label(
             frame,
             text="x2:",
@@ -265,7 +263,9 @@ class GraphicMethodView:
             fg=self.colors["text"],
             font=("Helvetica", 12, "bold"),
         ).pack(side=tk.LEFT, padx=5)
-
+        coef_x2 = self.create_entry(frame, width=3)
+        coef_x2.pack(side=tk.LEFT, padx=5)
+       
         inequality_type = ttk.Combobox(frame, values=["≤", "≥", "="], width=3, style="TCombobox")
         inequality_type.current(0)
         inequality_type.pack(side=tk.LEFT, padx=5)
@@ -275,6 +275,7 @@ class GraphicMethodView:
         limit.pack(side=tk.LEFT, padx=5)
 
         self.restrictions.append((coef_x1, coef_x2, inequality_type, limit))
+
 
     def parse_float(self, value, error_message):
         try:
@@ -329,7 +330,11 @@ class GraphicMethodView:
         x = np.linspace(0, 100, 400)
         feasible_region = []
         for coef1, coef2, inequality, limit in restrictions:
-            y = (limit - coef1 * x) / coef2
+            if abs(coef2) < 1e-9:
+                x_val = limit / coef1 if coef1 != 0 else 0
+                self.ax.axvline(x_val, color=self.colors["accent"], label=f"{coef1}x1 {inequality} {limit}")
+            else:
+                 y = (limit - coef1 * x) / coef2
             self.ax.plot(x, y, label=f"{coef1}x1 + {coef2}x2 {inequality} {limit}")
             if inequality == '≤' or inequality == '<=':
                 feasible_region.append((coef1, coef2, limit, '<='))
@@ -363,11 +368,18 @@ class GraphicMethodView:
             if all(self.satisfies_restriction(corner, coef1, coef2, limit, sign) for coef1, coef2, limit, sign in feasible_region):
                 feasible_points.append(corner)
 
-        if feasible_points:
+        if len(feasible_points) >= 3:
             hull = ConvexHull(feasible_points)
             polygon_points = [feasible_points[i] for i in hull.vertices]
             polygon = Polygon(polygon_points, closed=True, fill=True, color='#22d3ee', alpha=0.2)
             self.ax.add_patch(polygon)
+        elif feasible_points:
+            self.ax.fill(
+                [p[0] for p in feasible_points],
+                [p[1] for p in feasible_points],
+                color=self.colors["accent"],
+                alpha=0.15,
+            )
 
         result = self.calculate_optimal_solution(coef_x1, coef_x2, feasible_region, obj_type)
 
