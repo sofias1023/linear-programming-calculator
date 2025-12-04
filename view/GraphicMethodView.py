@@ -332,10 +332,12 @@ class GraphicMethodView:
         for coef1, coef2, inequality, limit in restrictions:
             if abs(coef2) < 1e-9:
                 x_val = limit / coef1 if coef1 != 0 else 0
-                self.ax.axvline(x_val, color=self.colors["accent"], label=f"{coef1}x1 {inequality} {limit}")
+                y_vals = np.linspace(0, max(10, limit * 1.5 if limit >= 0 else 10), 400)
+                x_vals = np.full_like(y_vals, x_val)
+                self.ax.plot(x_vals, y_vals, label=f"{coef1}x1 {inequality} {limit}")
             else:
-                 y = (limit - coef1 * x) / coef2
-            self.ax.plot(x, y, label=f"{coef1}x1 + {coef2}x2 {inequality} {limit}")
+                y_vals = (limit - coef1 * x) / coef2
+                self.ax.plot(x, y_vals, label=f"{coef1}x1 + {coef2}x2 {inequality} {limit}")
             if inequality == '≤' or inequality == '<=':
                 feasible_region.append((coef1, coef2, limit, '<='))
             elif inequality == '≥' or inequality == '>=':
@@ -361,6 +363,7 @@ class GraphicMethodView:
 
         corners.append((0, 0))
         corners.extend([(0, limit / coef2) for coef1, coef2, _, limit in restrictions if coef2 != 0])
+        corners.extend([(limit / coef1, 0) for coef1, _, _, limit in restrictions if coef1 != 0])
         corners = [corner for corner in corners if corner[0] >= 0 and corner[1] >= 0]
 
         feasible_points = []
@@ -411,7 +414,7 @@ class GraphicMethodView:
                 b.append(limit)
                 A.append([-coef1, -coef2])
                 b.append(-limit)
-            bounds = [(0, None), (0, None)]
+        bounds = [(0, None), (0, None)]
         result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
         if result.success:
             x_opt, y_opt = result.x
