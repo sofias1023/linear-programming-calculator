@@ -265,6 +265,28 @@ class TwoPhaseMethodView:
         self.input_frame.pack(pady=20)
         self.num_vars_entry = self.create_labeled_entry("Número de Variables:", font_size=18)
         self.num_constraints_entry = self.create_labeled_entry("Número de Restricciones:")
+        self.method_var = tk.StringVar(value="Método de las Dos Fases")
+
+        method_frame = tk.Frame(self.input_frame, bg=self.bg_color)
+        method_frame.pack(pady=2)
+        tk.Label(
+            method_frame,
+            text="Método de solución:",
+            bg=self.bg_color,
+            fg=self.text_primary,
+            font=("Helvetica", 14, "bold"),
+        ).pack(side=tk.LEFT, padx=5)
+
+        self.method_selector = ttk.Combobox(
+            method_frame,
+            textvariable=self.method_var,
+            values=["Método Gráfico", "Método de las Dos Fases"],
+            state="readonly",
+            width=22,
+            style="TCombobox",
+        )
+        self.method_selector.current(1)
+        self.method_selector.pack(side=tk.LEFT, padx=5)
         self.generate_button = tk.Button(
             self.input_frame,
             text="Crear Matriz",
@@ -311,7 +333,13 @@ class TwoPhaseMethodView:
             self.display_result("Debe ingresar al menos 2 variables.")
             return
 
-        if num_vars == 2:
+        selected_method = self.method_var.get()
+        if selected_method == "Método Gráfico":
+            if num_vars != 2:
+                self.subtitle_label.config(text="")
+                self.display_result("El método gráfico solo admite exactamente 2 variables.")
+                return
+            
             self.subtitle_label.config(text="Método Gráfico")
             self.root.destroy()
             from view.GraphicMethodView import GraphicMethodView
